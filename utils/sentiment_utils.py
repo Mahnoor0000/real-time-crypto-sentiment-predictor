@@ -2,21 +2,15 @@ from textblob import TextBlob
 
 
 def analyze_sentiment(text: str):
-    """
-    Simple sentiment analysis using TextBlob polarity.
-    Returns score (-1 to 1) and label: negative/neutral/positive
-    """
-    if not text or text.strip() == "":
-        return 0.0, "neutral"
-
+    """Return sentiment polarity and classification."""
     blob = TextBlob(text)
-    score = blob.sentiment.polarity  # -1..1
+    polarity = blob.sentiment.polarity
 
-    if score > 0.1:
-        label = "positive"
-    elif score < -0.1:
-        label = "negative"
+    if polarity > 0.1:
+        label = "😊 Positive"
+    elif polarity < -0.1:
+        label = "😟 Negative"
     else:
-        label = "neutral"
+        label = "😐 Neutral"
 
-    return score, label
+    return polarity, label
