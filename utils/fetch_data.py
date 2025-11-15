@@ -1,66 +1,42 @@
 import requests
 import pandas as pd
-from datetime import datetime
+
+BASE_URL = "https://api.binance.com/api/v3/klines"
+PRICE_URL = "https://api.binance.com/api/v3/ticker/price"
 
 
-BINANCE_BASE = "https://api.binance.com"
+def get_klines(symbol="BTCUSDT", interval="1m", limit=200):
+    """Fetch OHLCV candles from Binance and return a clean DataFrame."""
+    params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
 
-
-def get_klines(symbol: str, interval: str = "1m", limit: int = 500) -> pd.DataFrame:
-    """
-    Fetch historical klines (candles) from Binance.
-    symbol: e.g. 'BTCUSDT'
-    interval: e.g. '1m', '5m'
-    limit: up to 1000
-    """
-    url = f"{BINANCE_BASE}/api/v3/klines"
-    params = {"symbol": symbol, "interval": interval, "limit": limit}
-    resp = requests.get(url, params=params)
+    resp = requests.get(BASE_URL, params=params)
     resp.raise_for_status()
     data = resp.json()
 
-    # Kline format:
-    # [
-    #   [
-    #     1499040000000,      // Open time
-    #     "0.01634790",       // Open
-    #     "0.80000000",       // High
-    #     "0.01575800",       // Low
-    #     "0.01577100",       // Close
-    #     "148976.11427815",  // Volume
-    #     1499644799999,      // Close time
-    #     ...
-    #   ]
-    # ]
+    if not isinstance(data, list):
+        raise RuntimeError("Invalid Binance response:", data)
 
-    cols = [
-        "open_time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "number_of_trades",
-        "taker_buy_base", "taker_buy_quote", "ignore"
-    ]
-    df = pd.DataFrame(data, columns=cols)
-
-    # Convert types
-    numeric_cols = ["open", "high", "low", "close", "volume"]
-    for c in numeric_cols:
-        df[c] = df[c].astype(float)
-
-    df["open_time"] = df["open_time"].apply(
-        lambda x: datetime.fromtimestamp(x / 1000.0)
-    )
-    df["close_time"] = df["close_time"].apply(
-        lambda x: datetime.fromtimestamp(x / 1000.0)
+    df = pd.DataFrame(
+        data,
+        columns=[
+            "open_time", "open", "high", "low", "close", "volume",
+            "close_time", "qav", "num_trades", "tbbav", "tbqav", "ignore"
+        ],
     )
 
-    return df[["open_time", "open", "high", "low", "close", "volume"]]
+    # Convert numeric columns
+    numeric = ["open", "high", "low", "close", "volume"]
+    for col in numeric:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df["time"] = pd.to_datetime(df["open_time"], unit="ms")
+    df = df[["time", "open", "high", "low", "close", "volume"]].dropna()
+
+    return df
 
 
-def get_latest_price(symbol: str) -> float:
-    """
-    Fetch latest price using /ticker/price endpoint.
-    """
-    url = f"{BINANCE_BASE}/api/v3/ticker/price"
-    resp = requests.get(url, params={"symbol": symbol})
-    resp.raise_for_status()
-    data = resp.json()
-    return float(data["price"])
+def get_latest_price(symbol="BTCUSDT"):
+    """Returns latest price of a symbol from Binance."""
+    r = requests.get(PRICE_URL, params={"symbol": symbol})
+    r.raise_for_status()
+    return float(r.json()["price"])
